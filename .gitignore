@@ -1,0 +1,28 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.claude*
+
+# Claude Code's own config and any local git identity -- these live in this
+# directory by accident and must not reach a public repo.
+.claude.json
+.claude.json.backup
+.claude/
+.gitconfig
+
+# On-device state and secrets -- config.json holds the WiFi password.
+config.json
+templates.json
+spool.bin
+
+# Local artefacts
+preview/
+tools/firmware/
+*.uf2
+*.bmp
+*.pbm
+
+# Jekyll, if you build the docs site locally
+docs/_site/
+docs/.jekyll-cache/
+Gemfile.lock

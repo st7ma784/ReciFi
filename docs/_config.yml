@@ -1,0 +1,31 @@
+title: ReciFi
+description: A label print server that runs entirely on a Raspberry Pi Pico 2 W.
+remote_theme: just-the-docs/just-the-docs
+
+# Change these two if you fork or rename the repository.
+url: https://st7ma784.github.io
+baseurl: /ReciFi
+
+color_scheme: dark
+search_enabled: true
+
+aux_links:
+  "View on GitHub":
+    - "https://github.com/st7ma784/ReciFi"
+aux_links_new_tab: true
+
+nav_external_links:
+  - title: Source
+    url: https://github.com/st7ma784/ReciFi
+
+footer_content: >-
+  MIT licensed. ReciFi is not affiliated with ORGBRO; the Z3 protocol notes are
+  the result of independent work with hardware the author owns.
+
+plugins:
+  - jekyll-remote-theme
+
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - vendor

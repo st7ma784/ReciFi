@@ -1,0 +1,11 @@
+fastapi>=0.111
+uvicorn[standard]>=0.30
+pydantic>=2.7
+Pillow>=10.3
+qrcode>=7.4
+
+# Optional transports -- install what your printer actually needs.
+# USB bulk endpoint access (not needed if the kernel exposes /dev/usb/lp0)
+pyusb>=1.2
+# Bluetooth Low Energy (not needed for classic RFCOMM / SPP)
+bleak>=0.22

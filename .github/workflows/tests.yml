@@ -1,0 +1,81 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  micropython:
+    name: Test suite (MicroPython)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Run against the real MicroPython unix port, not CPython -- the gaps
+      # that bite (no int.bit_length, unordered dicts) only show up here.
+      - name: Run tests
+        run: |
+          docker run --rm -v "$PWD:/app" -w /app/tests \
+            -e MICROPYPATH=".frozen:/app/device:/app/tests" \
+            micropython/unix:latest micropython run.py
+
+  docs:
+    name: Docs placeholder check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Liquid evaluates {{ ... }} even inside code fences, so ReciFi's own
+      # template placeholders must be wrapped in raw tags or they publish blank.
+      - name: Check for unguarded placeholders
+        shell: pwsh
+        run: |
+          $bad = @()
+          foreach ($file in Get-ChildItem docs -Filter *.md) {
+              $text = Get-Content $file.FullName -Raw
+              $stripped = [regex]::Replace($text, '(?s)\{%\s*raw\s*%\}.*?\{%\s*endraw\s*%\}', '')
+              $hits = [regex]::Matches($stripped, '\{\{(.*?)\}\}') |
+                  ForEach-Object { $_.Groups[1].Value.Trim() } |
+                  Where-Object { $_ -notmatch '^site\.' }
+              if ($hits) { $bad += "$($file.Name): $($hits -join ', ')" }
+          }
+          if ($bad) { $bad | ForEach-Object { Write-Host "::error::unguarded placeholder -- $_" }; exit 1 }
+          Write-Host "docs ok"
+
+  qr:
+    name: QR cross-check (CPython)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install reference implementations
+        run: pip install --quiet qrcode opencv-python-headless numpy
+
+      # Compares all 640 version x EC level x mask combinations against the
+      # `qrcode` library byte for byte, then decodes the output with OpenCV.
+      - name: Compare against the reference encoder
+        run: python tools/qrcheck.py
+
+  render:
+    name: Sample labels render
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Render sample labels
+        run: |
+          mkdir -p preview
+          docker run --rm -v "$PWD:/app" -v "$PWD/preview:/out" -w /app/device \
+            -e MICROPYPATH=".frozen:/app/device" \
+            micropython/unix:latest micropython /app/tools/preview.py /out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sample-labels
+          path: preview/*.bmp

@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ReciFi</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<header>
+  <div class="brand">ReciFi<span>pico 2 w label server</span></div>
+  <div class="health">
+    <span id="pill" class="pill unknown">…</span>
+    <div class="health-text">
+      <div id="health-detail">connecting…</div>
+      <div id="health-sub" class="muted"></div>
+    </div>
+    <button id="btn-connect" class="primary">Connect</button>
+    <button id="btn-disconnect">Disconnect</button>
+  </div>
+</header>
+
+<nav id="tabs">
+  <button data-tab="print" class="active">Print</button>
+  <button data-tab="templates">Templates</button>
+  <button data-tab="connection">Connection</button>
+  <button data-tab="console">Console</button>
+</nav>
+
+<main>
+
+<!-- ---------------------------------------------------------------- print -->
+<section id="tab-print" class="tab active">
+  <div class="cols">
+    <div class="card">
+      <h2>Send a label</h2>
+      <label>Template <select id="print-template"></select></label>
+      <p id="print-template-desc" class="muted small"></p>
+      <label>Payload (JSON object, array of {label,value}, or plain text)
+        <textarea id="print-data" rows="10" spellcheck="false">{
+  "title": "Hello",
+  "sku": "ABC-123",
+  "url": "https://example.com"
+}</textarea>
+      </label>
+      <div class="row">
+        <label class="narrow">Copies <input id="print-copies" type="number" min="1" max="20" value="1"></label>
+        <button id="btn-preview">Preview</button>
+        <button id="btn-print" class="primary">Print</button>
+      </div>
+      <pre id="print-result" class="result"></pre>
+    </div>
+
+    <div class="card">
+      <h2>Preview</h2>
+      <p class="muted small">Rendered on the Pico at the configured head width, 1 bit per dot — the exact bitmap that gets rastered.</p>
+      <div id="preview-wrap" class="preview"><span class="muted">no preview yet</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ------------------------------------------------------------ templates -->
+<section id="tab-templates" class="tab">
+  <div class="cols">
+    <div class="card narrow-card">
+      <h2>Templates</h2>
+      <ul id="template-list" class="list"></ul>
+      <button id="btn-new-template">New template</button>
+    </div>
+
+    <div class="card">
+      <h2 id="editor-title">Edit template</h2>
+      <div class="row">
+        <label>Name <input id="t-name"></label>
+        <label>Id <input id="t-id" placeholder="auto"></label>
+      </div>
+      <label>Description <input id="t-desc"></label>
+      <label>Title line <input id="t-title" placeholder="{{title}}"></label>
+
+      <h3>Fields</h3>
+      <p class="muted small">Values may contain <code>{{placeholders}}</code>. A row whose placeholders are all missing is dropped.</p>
+      <table class="fields"><tbody id="t-fields"></tbody></table>
+      <button id="btn-add-field" class="small-btn">Add field</button>
+
+      <h3>QR code</h3>
+      <div class="row">
+        <label class="check"><input id="t-qr-on" type="checkbox"> include</label>
+        <label>Value <input id="t-qr-value" placeholder="{{url}}"></label>
+        <label class="narrow">Position
+          <select id="t-qr-pos"><option>top</option><option>bottom</option><option>left</option><option>right</option></select>
+        </label>
+        <label class="narrow">Scale <input id="t-qr-scale" type="number" min="1" max="12" value="3"></label>
+      </div>
+      <label>QR caption <input id="t-qr-caption"></label>
+
+      <h3>Layout</h3>
+      <p class="muted small">Text is the built-in 8×8 font at whole-number scales, so sizes are 1–4 (8/16/24/32 dots tall).</p>
+      <div class="row">
+        <label class="narrow">Title scale <input id="t-title-scale" type="number" min="1" max="4" value="3"></label>
+        <label class="narrow">Text scale <input id="t-text-scale" type="number" min="1" max="4" value="2"></label>
+        <label class="narrow">Margin <input id="t-margin" type="number" value="8"></label>
+        <label class="narrow">Line gap <input id="t-gap" type="number" value="4"></label>
+        <label class="narrow">Align <select id="t-align"><option>left</option><option>center</option></select></label>
+      </div>
+      <label>Footer <input id="t-footer"></label>
+      <label class="check"><input id="t-auto" type="checkbox"> append any unused payload keys as rows</label>
+
+      <div class="row">
+        <button id="btn-save-template" class="primary">Save</button>
+        <button id="btn-delete-template" class="danger">Delete</button>
+        <button id="btn-try-template">Preview with current payload</button>
+      </div>
+      <pre id="template-result" class="result"></pre>
+    </div>
+  </div>
+</section>
+
+<!-- ----------------------------------------------------------- connection -->
+<section id="tab-connection" class="tab">
+  <div class="cols">
+    <div class="card">
+      <h2>WiFi</h2>
+      <div id="wifi-state" class="muted small"></div>
+      <div class="row">
+        <label>Network
+          <select id="wifi-ssid"><option value="">— scan to list —</option></select>
+        </label>
+        <button id="btn-wifi-scan">Scan</button>
+      </div>
+      <label>Or type an SSID <input id="wifi-ssid-manual" placeholder="MANDER84"></label>
+      <label>Password <input id="wifi-pass" type="password" placeholder="unchanged"></label>
+      <div class="row">
+        <label>Hostname <input id="wifi-host" placeholder="recifi"></label>
+        <button id="btn-wifi-join" class="primary">Join</button>
+      </div>
+      <pre id="wifi-result" class="result"></pre>
+
+      <h2 style="margin-top:22px">Find the printer</h2>
+      <div class="row">
+        <label class="narrow">Scan <select id="scan-transport"><option value="">all transports</option></select></label>
+        <button id="btn-scan">Scan</button>
+        <span id="scan-status" class="muted small"></span>
+      </div>
+      <table class="devices">
+        <thead><tr><th></th><th>Name</th><th>Via</th><th>Address</th><th>Detail</th></tr></thead>
+        <tbody id="device-list"></tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h2>Link settings</h2>
+      <div class="row">
+        <label>Transport <select id="c-transport"></select></label>
+        <label>Protocol <select id="c-protocol"></select></label>
+      </div>
+      <label>Address <input id="c-address"></label>
+      <p id="c-hint" class="muted small"></p>
+      <p id="c-protocol-desc" class="muted small"></p>
+
+      <h3>Media</h3>
+      <div class="row">
+        <label class="narrow">Label width (mm) <input id="c-lw" type="number" step="0.1"></label>
+        <label class="narrow">Label height (mm) <input id="c-lh" type="number" step="0.1"></label>
+        <label class="narrow">DPI <input id="c-dpi" type="number"></label>
+        <button id="btn-derive" class="small-btn" title="set the render width from the label width and dpi">Fit width</button>
+      </div>
+      <div class="row">
+        <label class="narrow">Width (dots) <input id="c-width" type="number"></label>
+        <label class="narrow">Max height <input id="c-maxh" type="number"></label>
+        <label class="narrow">Density <input id="c-density" type="number" min="0" max="15"></label>
+        <label class="narrow">Speed <input id="c-speed" type="number" min="0" max="12"></label>
+      </div>
+      <div class="row">
+        <label class="narrow">Direction
+          <select id="c-direction"><option value="0">0 — normal</option><option value="1">1 — flipped</option></select>
+        </label>
+        <label class="narrow">After print
+          <select id="c-post"><option value="tear">tear</option><option value="peel">peel</option><option value="none">none</option></select>
+        </label>
+        <label class="narrow">Gap (mm) <input id="c-gap" type="number" step="0.1" placeholder="auto"></label>
+      </div>
+      <p class="muted small">
+        TSPL uses the mm values and direction; ESC/POS uses feed dots; Niimbot uses label type.
+      </p>
+      <div class="row">
+        <a class="muted small" href="/api/debug/calibrate" target="_blank">Print a test pattern</a>
+        <button id="btn-gapdetect" class="small-btn"
+                title="the printer measures the label gaps itself; it will feed a couple of labels">
+          Calibrate media
+        </button>
+      </div>
+      <div class="row">
+        <label class="narrow">Feed dots <input id="c-feed" type="number"></label>
+        <label class="narrow">Label type
+          <select id="c-label-type"><option value="1">gap</option><option value="2">black mark</option><option value="3">continuous</option></select>
+        </label>
+      </div>
+
+      <h3>QR</h3>
+      <div class="row">
+        <label class="narrow">EC level <select id="c-qr-level"><option>L</option><option>M</option><option>Q</option><option>H</option></select></label>
+        <label class="narrow">Mask
+          <select id="c-qr-mask">
+            <option value="">auto (best)</option>
+            <option>0</option><option>1</option><option>2</option><option>3</option>
+            <option>4</option><option>5</option><option>6</option><option>7</option>
+          </select>
+        </label>
+        <label class="check"><input id="c-auto" type="checkbox"> auto-connect and retry</label>
+      </div>
+      <div class="row">
+        <button id="btn-save-config" class="primary">Save settings</button>
+        <button id="btn-connect-2">Save &amp; connect</button>
+      </div>
+      <pre id="config-result" class="result"></pre>
+    </div>
+  </div>
+</section>
+
+<!-- -------------------------------------------------------------- console -->
+<section id="tab-console" class="tab">
+  <div class="cols">
+    <div class="card">
+      <h2>Raw bytes</h2>
+      <p class="muted small">If neither protocol prints, capture the vendor app's traffic and replay it here until the head reacts. Bytes go out untouched.</p>
+      <label>Hex <input id="raw-hex" placeholder="1b 40 1d 76 30 00 …" spellcheck="false"></label>
+      <label>…and/or text <input id="raw-text" spellcheck="false"></label>
+      <div class="row">
+        <label class="check"><input id="raw-reply" type="checkbox"> wait for a reply</label>
+        <button id="btn-raw" class="primary">Send</button>
+        <button id="btn-encode">Dump encoded label</button>
+      </div>
+      <pre id="raw-result" class="result"></pre>
+    </div>
+
+    <div class="card">
+      <h2>Event log</h2>
+      <ul id="event-log" class="list events"></ul>
+    </div>
+  </div>
+</section>
+
+</main>
+<script src="/static/app.js"></script>
+</body>
+</html>
