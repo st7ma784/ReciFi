@@ -63,11 +63,13 @@ the byte sequence — see the TSPL ones in `tests/test_api.py` for the pattern.
 
 ## Docs
 
-The site under `docs/` is Jekyll via GitHub Pages (just-the-docs). To preview
-locally:
+The site under `docs/` is Jekyll with the just-the-docs theme. It is built and
+deployed by `.github/workflows/pages.yml` on any push to `main` that touches
+`docs/`, so the theme is pinned in `docs/Gemfile` rather than fetched remotely.
+To preview locally:
 
 ```bash
-cd docs && bundle exec jekyll serve
+cd docs && bundle install && bundle exec jekyll serve
 ```
 
 Watch out for one hazard: ReciFi's own template syntax uses double-brace

@@ -1,8 +1,12 @@
 title: ReciFi
 description: A label print server that runs entirely on a Raspberry Pi Pico 2 W.
-remote_theme: just-the-docs/just-the-docs
+# Pinned in the Gemfile rather than fetched as a remote theme -- the site is
+# built by our own Actions workflow, so it need not be one of the themes
+# GitHub's own Pages builder supports.
+theme: just-the-docs
 
-# Change these two if you fork or rename the repository.
+# baseurl is overridden at build time by actions/configure-pages, so it stays
+# correct even if the repository is renamed. These are the local-preview values.
 url: https://st7ma784.github.io
 baseurl: /ReciFi
 
@@ -21,9 +25,6 @@ nav_external_links:
 footer_content: >-
   MIT licensed. ReciFi is not affiliated with ORGBRO; the Z3 protocol notes are
   the result of independent work with hardware the author owns.
-
-plugins:
-  - jekyll-remote-theme
 
 exclude:
   - Gemfile

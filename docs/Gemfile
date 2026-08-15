@@ -1,14 +1,15 @@
-# Only needed to preview the docs locally:
+# The docs site. GitHub Pages builds this via .github/workflows/pages.yml, so we
+# are not restricted to the `github-pages` gem's allowlist and can pin the theme
+# directly -- faster and more reproducible than fetching a remote theme.
 #
+# Preview locally:
 #   cd docs && bundle install && bundle exec jekyll serve
-#
-# GitHub Pages builds the site itself and ignores this file.
 source "https://rubygems.org"
 
-gem "github-pages", group: :jekyll_plugins
-gem "jekyll-remote-theme"
+gem "jekyll", "~> 4.3"
+gem "just-the-docs", "~> 0.10"
 
-# Ruby 3.4 dropped these from the stdlib.
+# Dropped from the Ruby stdlib in 3.4; harmless on 3.3.
 gem "csv"
 gem "base64"
 gem "bigdecimal"

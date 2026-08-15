@@ -25,4 +25,6 @@ tools/firmware/
 # Jekyll, if you build the docs site locally
 docs/_site/
 docs/.jekyll-cache/
+docs/vendor/
+docs/.bundle/
 Gemfile.lock
