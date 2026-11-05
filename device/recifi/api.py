@@ -4,7 +4,7 @@ import gc
 import time
 
 from . import config as configmod
-from . import render, store, wifi
+from . import logos, render, store, wifi
 from .printers.transports import TransportError
 from .server import Response, Router, error, file_response, json_response
 
@@ -208,6 +208,45 @@ def build(cfg, manager):
         if not store.delete(ident):
             return error(404, "no saved template %r" % ident)
         return json_response({"deleted": ident, "builtin_restored": store.is_builtin(ident)})
+
+    # -- logos ---------------------------------------------------------
+
+    @router.get("/api/logos")
+    async def list_logos(request):
+        return json_response({"logos": logos.listing(), "max_side": logos.MAX_SIDE,
+                              "max_logos": logos.MAX_LOGOS})
+
+    @router.post("/api/logos/{name}", raw=True)
+    async def upload_logo(request):
+        """Body: packed 1-bit rows (MSB first, 1 = black), ?w=&h= give the size."""
+        try:
+            width = int(request.query.get("w", 0))
+            height = int(request.query.get("h", 0))
+        except ValueError:
+            return error(400, "w and h must be integers")
+        name = request.params["name"]
+        problem = logos.check_upload(name, width, height, request.length)
+        if problem:
+            return error(400, problem)
+        gc.collect()
+        try:
+            saved = await logos.save_stream(name, width, height, request.read)
+        except (ValueError, OSError) as exc:
+            return error(400, "upload failed: %s" % exc)
+        return json_response(saved, 201)
+
+    @router.get("/api/logos/{name}")
+    async def get_logo(request):
+        gc.collect()
+        bitmap = logos.load(request.params["name"])
+        return bmp_stream(bitmap) if bitmap else error(404, "no such logo")
+
+    @router.delete("/api/logos/{name}")
+    async def delete_logo(request):
+        name = request.params["name"]
+        if not logos.delete(name):
+            return error(404, "no logo %r" % name)
+        return json_response({"deleted": logos.clean_name(name)})
 
     # -- printing ------------------------------------------------------
 

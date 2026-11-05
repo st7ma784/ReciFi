@@ -24,6 +24,7 @@
 <nav id="tabs">
   <button data-tab="print" class="active">Print</button>
   <button data-tab="templates">Templates</button>
+  <button data-tab="logos">Logos</button>
   <button data-tab="connection">Connection</button>
   <button data-tab="console">Console</button>
 </nav>
@@ -94,6 +95,19 @@
       </div>
       <label>QR caption <input id="t-qr-caption"></label>
 
+      <h3>Logo</h3>
+      <p class="muted small">Upload logos on the Logos tab. The name may be a <code>{{placeholder}}</code> to pick a logo per print.</p>
+      <div class="row">
+        <label>Logo
+          <input id="t-logo-name" list="logo-names" placeholder="none">
+          <datalist id="logo-names"></datalist>
+        </label>
+        <label class="narrow">Position
+          <select id="t-logo-pos"><option>top</option><option>left</option><option>right</option></select>
+        </label>
+        <label class="narrow">Size (dots) <input id="t-logo-size" type="number" min="0" max="600" value="0" title="longest side; 0 = as uploaded, shrunk only to fit"></label>
+      </div>
+
       <h3>Layout</h3>
       <p class="muted small">Text is the built-in 8×8 font at whole-number scales, so sizes are 1–4 (8/16/24/32 dots tall).</p>
       <div class="row">
@@ -112,6 +126,43 @@
         <button id="btn-try-template">Preview with current payload</button>
       </div>
       <pre id="template-result" class="result"></pre>
+    </div>
+  </div>
+</section>
+
+<!-- ---------------------------------------------------------------- logos -->
+<section id="tab-logos" class="tab">
+  <div class="cols">
+    <div class="card">
+      <h2>Upload a logo</h2>
+      <p class="muted small">
+        Any image up to 600×600 px. It is converted to pure black and white here in the
+        browser — the printer has no grey — so tune the threshold until the preview looks right.
+      </p>
+      <label>Image <input id="logo-file" type="file" accept="image/*"></label>
+      <div class="row">
+        <label>Name <input id="logo-name" placeholder="from the file name"></label>
+        <label class="narrow">Longest side (dots) <input id="logo-side" type="number" min="8" max="600" value="160"></label>
+      </div>
+      <div class="row">
+        <label>Threshold <span id="logo-threshold-val">128</span>
+          <input id="logo-threshold" type="range" min="1" max="254" value="128">
+        </label>
+        <label class="check"><input id="logo-dither" type="checkbox"> dither (for photos)</label>
+        <label class="check"><input id="logo-invert" type="checkbox"> invert</label>
+      </div>
+      <p id="logo-dims" class="muted small"></p>
+      <div class="preview"><canvas id="logo-canvas" width="1" height="1" style="background:#fff;image-rendering:pixelated;max-width:100%"></canvas></div>
+      <div class="row">
+        <button id="btn-logo-upload" class="primary" disabled>Upload</button>
+      </div>
+      <pre id="logo-result" class="result"></pre>
+    </div>
+
+    <div class="card">
+      <h2>Stored logos</h2>
+      <p id="logo-count" class="muted small"></p>
+      <div id="logo-list" class="logos"></div>
     </div>
   </div>
 </section>

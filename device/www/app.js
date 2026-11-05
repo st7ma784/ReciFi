@@ -342,6 +342,11 @@ function editTemplate(t) {
   $("t-qr-scale").value = qr ? qr.scale : 3;
   $("t-qr-caption").value = qr ? qr.caption : "";
 
+  const logo = editing.logo;
+  $("t-logo-name").value = logo ? logo.name : "";
+  $("t-logo-pos").value = logo ? logo.position : "top";
+  $("t-logo-size").value = logo ? logo.size : 0;
+
   $("btn-delete-template").disabled = !t || t.builtin;
   document.querySelectorAll("#template-list li").forEach((li) =>
     li.classList.toggle("active", t && li.dataset.id === t.id));
@@ -369,6 +374,11 @@ function collectTemplate() {
       position: $("t-qr-pos").value,
       scale: +$("t-qr-scale").value,
       caption: $("t-qr-caption").value,
+    } : null,
+    logo: $("t-logo-name").value.trim() ? {
+      name: $("t-logo-name").value.trim(),
+      position: $("t-logo-pos").value,
+      size: +$("t-logo-size").value || 0,
     } : null,
     title_scale: +$("t-title-scale").value,
     text_scale: +$("t-text-scale").value,
@@ -408,6 +418,160 @@ $("btn-try-template").onclick = async () => {
     await doPreview({ inline: collectTemplate(), data: payload() });
     document.querySelector('#tabs button[data-tab="print"]').click();
   } catch (e) { show($("template-result"), e.message, false); }
+};
+
+// --------------------------------------------------------------- logos
+//
+// The Pico cannot decode PNG or JPEG, so the browser does all the image work:
+// scale, flatten transparency onto white, threshold (or dither) to 1 bit, and
+// pack rows MSB-first with 1 = black -- the label framebuffer's own format.
+
+const LOGO_MAX = 600;
+let logoImage = null;
+let logoPacked = null;  // { w, h, bytes }
+
+async function loadLogos() {
+  try {
+    const { logos, max_logos } = await api("/api/logos");
+    $("logo-names").innerHTML = logos.map((l) => `<option value="${esc(l.name)}">`).join("");
+    $("logo-count").textContent = `${logos.length} of ${max_logos} stored`;
+    $("logo-list").innerHTML = logos.map((l) => `
+      <figure>
+        <img src="/api/logos/${encodeURIComponent(l.name)}?t=${Date.now()}" alt="${esc(l.name)}">
+        <figcaption>
+          <span>${esc(l.name)}<br><small>${l.width}×${l.height}</small></span>
+          <button class="small-btn danger" data-name="${esc(l.name)}">Delete</button>
+        </figcaption>
+      </figure>`).join("") || '<span class="muted small">none yet</span>';
+    $("logo-list").querySelectorAll("button[data-name]").forEach((b) => {
+      b.onclick = async () => {
+        if (!confirm(`Delete logo "${b.dataset.name}"?`)) return;
+        try {
+          await api("/api/logos/" + encodeURIComponent(b.dataset.name), { method: "DELETE" });
+          loadLogos();
+        } catch (e) { show($("logo-result"), e.message, false); }
+      };
+    });
+  } catch (e) { $("logo-count").textContent = e.message; }
+}
+
+function logoSlug(name) {
+  return name.toLowerCase().replace(/\.[^.]*$/, "").replace(/[^a-z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "").slice(0, 32);
+}
+
+$("logo-file").onchange = () => {
+  const file = $("logo-file").files[0];
+  if (!file) return;
+  const img = new Image();
+  img.onload = () => {
+    URL.revokeObjectURL(img.src);
+    logoImage = img;
+    const longest = Math.max(img.naturalWidth, img.naturalHeight);
+    const labelW = STATUS ? STATUS.config.width_dots - 16 : 376;
+    $("logo-side").value = Math.max(8, Math.min(longest, LOGO_MAX, labelW));
+    if (!$("logo-name").value) $("logo-name").value = logoSlug(file.name);
+    const note = longest > LOGO_MAX ? ` — larger than ${LOGO_MAX} px, so it will be scaled down` : "";
+    show($("logo-result"), `loaded ${img.naturalWidth}×${img.naturalHeight}${note}`);
+    convertLogo();
+  };
+  img.onerror = () => show($("logo-result"), "could not read that image", false);
+  img.src = URL.createObjectURL(file);
+};
+
+function convertLogo() {
+  if (!logoImage) return;
+  const side = Math.max(8, Math.min(LOGO_MAX, +$("logo-side").value || LOGO_MAX));
+  const k = side / Math.max(logoImage.naturalWidth, logoImage.naturalHeight);
+  const w = Math.max(1, Math.round(logoImage.naturalWidth * k));
+  const h = Math.max(1, Math.round(logoImage.naturalHeight * k));
+
+  const work = document.createElement("canvas");
+  work.width = w; work.height = h;
+  const ctx = work.getContext("2d");
+  ctx.fillStyle = "#fff";  // transparent areas print as paper, not black
+  ctx.fillRect(0, 0, w, h);
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(logoImage, 0, 0, w, h);
+  const rgba = ctx.getImageData(0, 0, w, h).data;
+
+  const lum = new Float32Array(w * h);
+  for (let i = 0; i < w * h; i++) {
+    lum[i] = 0.299 * rgba[i * 4] + 0.587 * rgba[i * 4 + 1] + 0.114 * rgba[i * 4 + 2];
+  }
+  const threshold = +$("logo-threshold").value;
+  const dither = $("logo-dither").checked;
+  const invert = $("logo-invert").checked;
+  const stride = Math.ceil(w / 8);
+  const bytes = new Uint8Array(stride * h);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = y * w + x;
+      const old = lum[i];
+      let black = old < threshold;
+      if (dither) {  // Floyd-Steinberg
+        const err = old - (black ? 0 : 255);
+        if (x + 1 < w) lum[i + 1] += err * 7 / 16;
+        if (y + 1 < h) {
+          if (x > 0) lum[i + w - 1] += err * 3 / 16;
+          lum[i + w] += err * 5 / 16;
+          if (x + 1 < w) lum[i + w + 1] += err / 16;
+        }
+      }
+      if (invert) black = !black;
+      if (black) bytes[y * stride + (x >> 3)] |= 0x80 >> (x & 7);
+    }
+  }
+  logoPacked = { w, h, bytes };
+
+  // Show the exact bits that will be uploaded.
+  const view = $("logo-canvas");
+  view.width = w; view.height = h;
+  const vctx = view.getContext("2d");
+  const out = vctx.createImageData(w, h);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const on = bytes[y * stride + (x >> 3)] & (0x80 >> (x & 7));
+      const p = (y * w + x) * 4;
+      out.data[p] = out.data[p + 1] = out.data[p + 2] = on ? 0 : 255;
+      out.data[p + 3] = 255;
+    }
+  }
+  vctx.putImageData(out, 0, 0);
+  view.style.width = Math.min(w * 2, 480) + "px";
+  const mm = STATUS ? ` (${(w * 25.4 / STATUS.config.dpi).toFixed(1)}×${(h * 25.4 / STATUS.config.dpi).toFixed(1)} mm)` : "";
+  $("logo-dims").textContent = `${w}×${h} dots${mm}, ${bytes.length} bytes`;
+  $("btn-logo-upload").disabled = false;
+}
+
+["logo-side", "logo-threshold", "logo-dither", "logo-invert"].forEach((id) =>
+  $(id).addEventListener("input", () => {
+    $("logo-threshold-val").textContent = $("logo-threshold").value;
+    convertLogo();
+  }));
+
+$("btn-logo-upload").onclick = async () => {
+  if (!logoPacked) return;
+  const name = logoSlug($("logo-name").value || "logo");
+  if (!name) { show($("logo-result"), "give the logo a name", false); return; }
+  const { w, h, bytes } = logoPacked;
+  const btn = $("btn-logo-upload");
+  btn.disabled = true;
+  show($("logo-result"), "uploading…");
+  try {
+    const res = await fetch(`/api/logos/${encodeURIComponent(name)}?w=${w}&h=${h}`, {
+      method: "POST",
+      headers: { "content-type": "application/octet-stream" },
+      body: bytes,
+    });
+    const body = await res.json().catch(() => ({ detail: res.statusText }));
+    if (!res.ok) throw new Error(body.detail);
+    show($("logo-result"), `saved "${body.name}" (${body.width}×${body.height}). ` +
+      `Use it in a template's Logo section.`);
+    $("logo-name").value = body.name;
+    loadLogos();
+  } catch (e) { show($("logo-result"), e.message, false); }
+  finally { btn.disabled = false; }
 };
 
 // ------------------------------------------------------- print/preview
@@ -485,5 +649,6 @@ $("btn-encode").onclick = async () => {
 };
 
 refresh();
+loadLogos();
 loadTemplates().then(() => editTemplate(TEMPLATES[0]));
 setInterval(refresh, 4000);

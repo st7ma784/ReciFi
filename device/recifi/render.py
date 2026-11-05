@@ -10,6 +10,7 @@ budget for templates instead of glyph tables.
 
 import framebuf
 
+from . import logos as logomod
 from . import qr as qrmod
 
 FONT_W = 8
@@ -28,6 +29,7 @@ DEFAULTS = {
     "line_gap": 4,
     "align": "left",
     "min_height": 0,
+    "logo": None,
 }
 
 
@@ -191,12 +193,16 @@ def resolve(tpl, data):
                 continue
             rows.append((key, _stringify(value), False))
 
+    logo_spec = _opt(tpl, "logo")
+    logo = substitute(logo_spec.get("name", ""), values) if logo_spec else ""
+
     return {
         "title": title,
         "rows": rows,
         "footer": footer,
         "qr_value": qr_value,
         "qr_caption": qr_caption,
+        "logo": logo,
     }
 
 
@@ -303,7 +309,7 @@ def _fit_qr(matrix, requested, limit, min_scale=1):
     return scale, modules * scale
 
 
-def _build(tpl, parts, width, cfg, include_qr):
+def _build(tpl, parts, width, cfg, include_qr, top_logo=None):
     """Produce a display list plus its total height, without drawing."""
     title_scale = max(1, int(_opt(tpl, "title_scale")))
     text_scale = max(1, int(_opt(tpl, "text_scale")))
@@ -326,6 +332,11 @@ def _build(tpl, parts, width, cfg, include_qr):
         for line in lines:
             items.append(("text", line, scale, how))
             height += FONT_H * scale
+        add_gap()
+
+    if top_logo is not None:
+        items.append(("logo", top_logo, 0, 0))
+        height += top_logo.height
         add_gap()
 
     matrix = None
@@ -404,6 +415,10 @@ def _draw(fb, items, width, x0, y0, gap):
         elif kind == "qr":
             _draw_qr(fb, payload, x0 + max(0, (width - extra) // 2) + 4 * scale, y + 4 * scale, scale)
             y += extra
+        elif kind == "logo":
+            # key=0: white logo pixels are transparent, so only black burns.
+            fb.blit(payload.fb, x0 + max(0, (width - payload.width) // 2), y, 0)
+            y += payload.height
         elif kind == "row":
             label, lines = payload
             _draw_text(fb, label, x0, y, scale)
@@ -477,24 +492,49 @@ def render(tpl, data, cfg):
     gap = int(_opt(tpl, "line_gap"))
     inner = max(FONT_W, width - margin * 2)
     spec = _opt(tpl, "qr")
+    limit = int(cfg.get("max_height", 1200))
+    avail_h = max(FONT_H, limit - margin * 2)
 
-    side = None
+    # Side columns: position -> (kind, thing, width, height). A QR and a logo
+    # can share a label as long as they take different sides.
+    sides = {}
+    side_qr = False
     if spec and parts["qr_value"] and spec.get("position", "bottom") in ("left", "right"):
         matrix = _qr_matrix(parts["qr_value"], cfg)
         scale, size = _fit_qr(matrix, spec.get("scale", 3), inner // 2,
                               cfg.get("qr_min_scale", 4))
-        side = (matrix, scale, size)
-        text_width = max(FONT_W, inner - size - margin)
-    else:
-        text_width = inner
+        sides[spec["position"]] = ("qr", (matrix, scale), size, size)
+        side_qr = True
 
-    items, body = _build(tpl, parts, text_width, cfg, include_qr=side is None)
-    if side is not None:
-        body = max(body, side[2])
+    logo_spec = _opt(tpl, "logo")
+    logo = logomod.load(parts["logo"]) if logo_spec and parts["logo"] else None
+    want = int(logo_spec.get("size", 0) or 0) if logo else 0
+    top_logo = None
+    if logo is not None:
+        position = logo_spec.get("position", "top")
+        if position in ("left", "right") and position not in sides:
+            box_w = min(want, inner // 2) if want else inner // 2
+            logo = logomod.fit(logo, box_w, min(want, avail_h) if want else avail_h)
+            sides[position] = ("logo", logo, logo.width, logo.height)
+        else:
+            top_logo = logo  # sized below, once the text column is known
+
+    text_width = inner
+    for kind, thing, w, h in sides.values():
+        text_width -= w + margin
+    text_width = max(FONT_W, text_width)
+
+    if top_logo is not None:
+        top_logo = logomod.fit(top_logo, min(want, text_width) if want else text_width,
+                               min(want, avail_h) if want else avail_h)
+
+    items, body = _build(tpl, parts, text_width, cfg, include_qr=not side_qr,
+                         top_logo=top_logo)
+    for kind, thing, w, h in sides.values():
+        body = max(body, h)
 
     height = body + margin * 2
     height = max(height, int(_opt(tpl, "min_height")))
-    limit = int(cfg.get("max_height", 1200))
     if height > limit:
         height = limit
     # Raster protocols address memory in whole bytes down the page.
@@ -503,13 +543,18 @@ def render(tpl, data, cfg):
 
     label = Label(width, height)
     x0 = margin
-    if side is not None and spec.get("position") == "left":
-        x0 = margin + side[2] + margin
+    if "left" in sides:
+        x0 = margin + sides["left"][2] + margin
     _draw(label.fb, items, text_width, x0, margin, gap)
 
-    if side is not None:
-        matrix, scale, size = side
-        qx = margin if spec.get("position") == "left" else width - margin - size
-        _draw_qr(label.fb, matrix, qx + 4 * scale, margin + 4 * scale, scale)
+    for position, (kind, thing, w, h) in sides.items():
+        sx = margin if position == "left" else width - margin - w
+        if kind == "qr":
+            matrix, scale = thing
+            _draw_qr(label.fb, matrix, sx + 4 * scale, margin + 4 * scale, scale)
+        else:
+            # Centred down the label, so a short logo sits beside the text block.
+            sy = margin + max(0, (height - margin * 2 - h) // 2)
+            label.fb.blit(thing.fb, sx, sy, 0)
 
     return label

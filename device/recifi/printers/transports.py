@@ -338,9 +338,14 @@ class BLETransport(Transport):
 
         try:
             self._char = await self._find_char(wanted)
-        except Exception:
+        except Exception as exc:
             await self.disconnect()
-            raise
+            if isinstance(exc, TransportError):
+                raise
+            # aioble raises bare TypeErrors when the link drops mid-discovery
+            # (its conn_handle goes None). Surface that as a normal connect
+            # failure so the health loop retries instead of crashing main.
+            raise TransportError("BLE link dropped during service discovery: %r" % exc)
         props = getattr(self._char, "properties", _WRITE)
         # Prefer acknowledged writes wherever the characteristic allows them:
         # the stack flow-controls those, whereas write-without-response leaves

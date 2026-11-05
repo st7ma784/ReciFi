@@ -126,6 +126,20 @@ def normalise(tpl):
         }
     else:
         out["qr"] = None
+
+    # A logo is referenced by name (which may itself be a {{placeholder}});
+    # the bitmap lives in logos/, uploaded separately.
+    logo = tpl.get("logo")
+    if isinstance(logo, dict) and logo.get("name"):
+        position = logo.get("position", "top")
+        out["logo"] = {
+            "name": str(logo.get("name")),
+            "position": position if position in ("top", "left", "right") else "top",
+            # Longest side in dots; 0 = as uploaded (shrunk only if it won't fit).
+            "size": _clamp(logo.get("size"), 0, 600, 0),
+        }
+    else:
+        out["logo"] = None
     return out
 
 

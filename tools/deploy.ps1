@@ -141,7 +141,7 @@ try {
 
     $files = if ($Files) { $Files } else { @(
         "main.py",
-        "recifi/__init__.py", "recifi/api.py", "recifi/config.py", "recifi/qr.py",
+        "recifi/__init__.py", "recifi/api.py", "recifi/config.py", "recifi/logos.py", "recifi/qr.py",
         "recifi/render.py", "recifi/server.py", "recifi/store.py", "recifi/wifi.py",
         "recifi/printers/__init__.py", "recifi/printers/protocols.py",
         "recifi/printers/transports.py",

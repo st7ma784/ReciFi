@@ -96,6 +96,15 @@ monitor.
 | `PUT /api/templates/{id}` | Create or replace at a known id |
 | `DELETE /api/templates/{id}` | Delete. Deleting a shadowed built-in restores the original. |
 
+## Logos
+
+| | |
+|---|---|
+| `GET /api/logos` | `{"logos": [{name, width, height}], "max_side": 600, "max_logos": 16}` |
+| `POST /api/logos/{name}?w=W&h=H` | Body: raw 1-bit pixels, rows packed MSB first, each row padded to a whole byte, `1` = black (exactly `ceil(W/8)*H` bytes). Stored as `logos/{name}.pbm`. |
+| `GET /api/logos/{name}` | The logo as a 1-bit BMP |
+| `DELETE /api/logos/{name}` | Delete it |
+
 ## Connection
 
 | | |

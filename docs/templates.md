@@ -122,6 +122,27 @@ that, phone cameras struggle once thermal bleed has thickened each module.
 Bigger is always better if the label can afford it. A short payload at scale 6
 (0.75 mm modules) is comfortably scannable across a room.
 
+## Logos
+
+Upload a black-and-white logo (up to 600×600 px) on the dashboard's **Logos**
+tab, then reference it by name:
+
+```json
+{"logo": {"name": "acme", "position": "left", "size": 96}}
+```
+
+| Field | |
+|---|---|
+| `name` | The uploaded logo's name. Placeholders work, so one template can print a different logo per payload; an unknown name just prints without one. |
+| `position` | `top` (centred above everything), `left` or `right` (a column beside the text, centred vertically). If a side QR already holds that side, the logo goes on top. |
+| `size` | Longest side in dots; `0` keeps the uploaded size. Logos are only ever shrunk, and always to fit the label. |
+
+The browser turns the image into 1-bit pixels before upload: transparent areas
+become paper, and there's a threshold slider, an invert option and a dither
+option for photos. Shrinking happens on the Pico with nearest-neighbour
+scaling, which looks rougher than the browser's resize. For the cleanest
+result, upload the logo at the size you will print it.
+
 ## Layout
 
 | Field | Default | |

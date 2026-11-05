@@ -16,6 +16,9 @@ import json
 MAX_LINE = 512
 MAX_HEADERS = 24
 MAX_BODY = 12288
+# Routes registered with raw=True read their own body (an upload streamed
+# straight to flash), so they get a bigger ceiling than JSON does.
+MAX_UPLOAD = 49152
 
 STATUS = {
     200: "OK", 201: "Created", 204: "No Content", 400: "Bad Request",
@@ -68,13 +71,29 @@ def error(status, message):
 
 
 class Request:
-    def __init__(self, method, path, query, headers, body):
+    def __init__(self, method, path, query, headers, body, reader=None, length=None):
         self.method = method
         self.path = path
         self.query = query
         self.headers = headers
         self.body = body
         self.params = {}
+        # For raw routes the body is still on the socket: `length` bytes of it.
+        self.reader = reader
+        self.length = len(body) if length is None else length
+        self._pos = 0
+
+    async def read(self, n):
+        """Next <= n bytes of the body, from memory or straight off the socket."""
+        n = min(n, self.length - self._pos)
+        if n <= 0:
+            return b""
+        if self.reader is None:
+            chunk = self.body[self._pos : self._pos + n]
+        else:
+            chunk = await self.reader.read(n)
+        self._pos += len(chunk)
+        return chunk
 
     def json(self):
         if not self.body:
@@ -91,9 +110,14 @@ class Request:
 class Router:
     def __init__(self):
         self.routes = []
+        # Handlers that read their own body. A set rather than a flag on the
+        # function, because MicroPython functions cannot carry attributes.
+        self.raw = set()
 
-    def add(self, method, pattern, handler):
+    def add(self, method, pattern, handler, raw=False):
         self.routes.append((method, pattern.strip("/").split("/"), handler))
+        if raw:
+            self.raw.add(handler)
 
     def get(self, pattern):
         def wrap(fn):
@@ -101,9 +125,9 @@ class Router:
             return fn
         return wrap
 
-    def post(self, pattern):
+    def post(self, pattern, raw=False):
         def wrap(fn):
-            self.add("POST", pattern, fn)
+            self.add("POST", pattern, fn, raw)
             return fn
         return wrap
 
@@ -173,14 +197,22 @@ async def _parse(reader):
     else:
         raise ValueError("too many headers")
 
-    body = b""
-    length = int(headers.get("content-length", 0) or 0)
-    if length > MAX_BODY:
-        raise ValueError("body too large")
-    if length:
-        body = await reader.readexactly(length)
+    # The body stays on the socket until the route is known: _body decides
+    # whether to buffer it or hand the reader to a raw handler.
+    try:
+        length = int(headers.get("content-length", 0) or 0)
+    except ValueError:
+        raise ValueError("bad content-length")
+    return Request(method, unquote(target), query, headers, b"", length=length)
 
-    return Request(method, unquote(target), query, headers, body)
+
+async def _body(reader, request, raw):
+    if request.length > (MAX_UPLOAD if raw else MAX_BODY):
+        raise ValueError("body too large")
+    if raw:
+        request.reader = reader
+    elif request.length:
+        request.body = await reader.readexactly(request.length)
 
 
 async def _send(writer, response):
@@ -248,6 +280,12 @@ async def serve(router, host="0.0.0.0", port=80, on_error=None):
                 return
 
             handler, params = router.match(request.method, request.path)
+            if handler is not None and handler != 405:
+                try:
+                    await _body(reader, request, handler in router.raw)
+                except (ValueError, EOFError) as exc:
+                    await _send(writer, error(400, str(exc)))
+                    return
             if handler is None:
                 response = error(404, "no route for %s" % request.path)
             elif handler == 405:

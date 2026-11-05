@@ -11,7 +11,7 @@ import gc
 import os
 import sys
 
-MODULES = ("test_qr", "test_render", "test_store", "test_server", "test_api")
+MODULES = ("test_qr", "test_render", "test_store", "test_logos", "test_server", "test_api")
 
 SCRATCH = "/tmp/recifi-test"
 
